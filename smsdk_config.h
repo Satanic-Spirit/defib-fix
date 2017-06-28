@@ -12,7 +12,7 @@
 #define SMEXT_CONF_NAME			"DefibFix Extension"
 #define SMEXT_CONF_DESCRIPTION		"Fixes defibrillator re-revive clone bug (on servers higher than 8 players)"
 #define SMEXT_CONF_VERSION		"1.0.1"
-#define SMEXT_CONF_AUTHOR		"V10"
+#define SMEXT_CONF_AUTHOR		"V10, Accelerator"
 #define SMEXT_CONF_URL			"http://www.v10.name/"
 #define SMEXT_CONF_LOGTAG		"DefibFix"
 #define SMEXT_CONF_LICENSE		"GPL"

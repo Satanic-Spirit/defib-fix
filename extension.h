@@ -9,9 +9,8 @@
  */
 
 #include "smsdk_ext.h"
-#include <igameevents.h>
 
-#define L4D_MAX_PLAYERS 64
+#define L4D_MAX_PLAYERS 32
 #define L4D_TEAM_SURVIVOR 2
 
 class CBasePlayer{};
@@ -95,7 +94,6 @@ public:
 	 */
 	//virtual bool SDK_OnMetamodPauseChange(bool paused, char *error, size_t maxlength);
 public:
-	bool FireGameEvent(IGameEvent *eEvent, bool dDontBroadcast);
 	bool SetupHooks();
 	void RemoveHooks();
 #endif

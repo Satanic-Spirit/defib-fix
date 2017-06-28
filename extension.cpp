@@ -1,9 +1,6 @@
 #include "extension.h"
 #include "CDetour/detours.h"
-#include <igameevents.h>
 #include <iplayerinfo.h>
-#include <server_class.h>
-
 
 #define GAMEDATA_FILE "defibfix"
 CDetour *Detour_GetPlayerByCharacter = NULL;
@@ -20,8 +17,6 @@ IServerGameEnts *gameents = NULL;
 DefibFix g_DefibFix;		/**< Global singleton for extension's main interface */
 SMEXT_LINK(&g_DefibFix);
 
-//#define ADVANCED_DEBUG
-
 #define TCF_DefibrillatorIDLE 0
 #define TCF_DefibrillatorOnStartAction 1
 #define TCF_DefibrillatorOnActionComplete 2
@@ -29,59 +24,75 @@ SMEXT_LINK(&g_DefibFix);
 BYTE TCF = TCF_DefibrillatorIDLE;
 Vector g_lastedict_pos;
 
-
 DETOUR_DECL_STATIC1(GetPlayerByCharacter, void *, int, charaster)
 {
-	float fMinDistance = 10.0;
-	CBaseEntity* pMinDistEnt = NULL;
-	CBaseEntity* pAnyDeadSurvEnt = NULL;
-	int iMinDistPlayerIndex = -1;
-
-	if (TCF == TCF_DefibrillatorOnStartAction || TCF == TCF_DefibrillatorOnActionComplete){
+	if (TCF == TCF_DefibrillatorOnStartAction || TCF == TCF_DefibrillatorOnActionComplete)
+	{
 		TCF = TCF_DefibrillatorIDLE;
-		for (int i=0; i<=L4D_MAX_PLAYERS; i++){
+
+		float fMinDistance = 50.0;
+		int iAnyDeadSurvIndex = -1;
+		int iMinDistPlayerIndex = -1;
+		const char* pMinDistPlayerName = NULL;
+		const char* pAnyDeadSurvPlayerName = NULL;
+
+		for (int i = 1; i <= L4D_MAX_PLAYERS; i++)
+		{
 			IGamePlayer *player = playerhelpers->GetGamePlayer(i);
-			if (player &&  player->IsInGame())
+			if (player && player->IsInGame())
 			{
 				IPlayerInfo* info = player->GetPlayerInfo();
 				if(info)
 				{
-					#ifdef ADVANCED_DEBUG
-						g_pSM->LogMessage(myself,"Checking player %s (num=%d, team=%d, dead=%d)", info->GetName(),i, info->GetTeamIndex(),info->IsDead());
-					#endif
 					if(info->GetTeamIndex() == L4D_TEAM_SURVIVOR && (info->IsDead() || info->IsObserver()))
 					{
-						pAnyDeadSurvEnt = gamehelpers->ReferenceToEntity(i);
+						const char* pName = info->GetName();
+
+						iAnyDeadSurvIndex = i;
+						pAnyDeadSurvPlayerName = pName;
+
 						float tdist = g_lastedict_pos.DistTo(g_SurvivorDeathPos[i]);
-						if (tdist < fMinDistance){
+						if (tdist < fMinDistance)
+						{
 							fMinDistance = tdist;
-							pMinDistEnt = gamehelpers->ReferenceToEntity(i);
 							iMinDistPlayerIndex = i;
+							pMinDistPlayerName = pName;
 						}
 					}
 				}
 			}
 		}
-		if (pMinDistEnt) {
-			g_pSM->LogMessage(myself,"Found player (%N)%d, distance %f .", iMinDistPlayerIndex, iMinDistPlayerIndex, fMinDistance);
-			return pMinDistEnt;
-		} else if (pAnyDeadSurvEnt){
-			g_pSM->LogMessage(myself,"Found player (%N)%d, distance unknown.", iMinDistPlayerIndex, iMinDistPlayerIndex);
-			return pAnyDeadSurvEnt;
+
+		CBaseEntity* result = NULL;
+
+		if (iMinDistPlayerIndex != -1)
+		{
+			g_pSM->LogMessage(myself,"Found player (%s)%d, distance %f .", pMinDistPlayerName, iMinDistPlayerIndex, fMinDistance);
+			result = gamehelpers->ReferenceToEntity(iMinDistPlayerIndex);
 		}
 
-		g_pSM->LogMessage(myself,"Player NOT FOUND. Using default engine logic.");
+		if (!result && iAnyDeadSurvIndex != -1)
+		{
+			g_pSM->LogMessage(myself,"Found player (%s)%d, distance unknown.", pAnyDeadSurvPlayerName, iAnyDeadSurvIndex);
+			result = gamehelpers->ReferenceToEntity(iAnyDeadSurvIndex);
+		}
+
+		if (result)
+		{
+			return result;
+		}
+
+		g_pSM->LogMessage(myself,"Player NOT FOUND. Return null.");
+		return 0;
 	}
 	return DETOUR_STATIC_CALL(GetPlayerByCharacter)(charaster);
 }
 
 DETOUR_DECL_STATIC1(CSurvivorDeathModel__Create, CBaseEntity *, CBasePlayer*, bplayer)
 {
-	CBaseEntity * pEntity=(CBaseEntity *)bplayer;
-	edict_t *pEdict=gameents->BaseEntityToEdict(pEntity);
+	edict_t *pEdict=gameents->BaseEntityToEdict((CBaseEntity*)bplayer);
 
 	int client=gamehelpers->IndexOfEdict(pEdict);
-	//g_pSM->LogMessage(myself,"client = %x", client);
 	
 	CBaseEntity * result = DETOUR_STATIC_CALL(CSurvivorDeathModel__Create)(bplayer);
 	if (client > 0) 
@@ -94,40 +105,40 @@ DETOUR_DECL_STATIC1(CSurvivorDeathModel__Create, CBaseEntity *, CBasePlayer*, bp
 	return result;
 }
 
-
 DETOUR_DECL_MEMBER4(DefibrillatorOnStartAction, void *, int,reserved, void*,player, void*,entity, int,reserved2)
 {
 	edict_t *edict=gameents->BaseEntityToEdict((CBaseEntity*)entity);
 	if (edict)
 	{
-		g_lastedict_pos=edict->GetCollideable()->GetCollisionOrigin();
-		g_pSM->LogMessage(myself,"DefibrillatorOnStart pos: %f %f %f",g_lastedict_pos[0],g_lastedict_pos[1],g_lastedict_pos[2]);
-		TCF = TCF_DefibrillatorOnStartAction;
-		
-		int isAlive = 1;
-		for (int i=0; i<=L4D_MAX_PLAYERS; i++)
+		int iAlive = 1;
+		for (int i=1; i<=L4D_MAX_PLAYERS; i++)
 		{
 			IGamePlayer *player = playerhelpers->GetGamePlayer(i);
-			if (player &&  player->IsInGame())
+			if (player && player->IsInGame())
 			{
 				IPlayerInfo* info = player->GetPlayerInfo();
 				if(info)
 				{
 					if(info->GetTeamIndex() == L4D_TEAM_SURVIVOR && (info->IsDead() || info->IsObserver()))
 					{
-						isAlive = 0;
+						iAlive = 0;
 						break;
 					}
 				}
 			}
 		}
-		if (isAlive == 1)
+		if (iAlive == 1)
 		{
 			engine->RemoveEdict(edict);
-			g_pSM->LogMessage(myself,"All players is alive! Dead body removed.");
+			g_pSM->LogMessage(myself,"DefibrillatorOnStart: All players is alive! Dead body removed.");
+		}
+		else
+		{
+			g_lastedict_pos=edict->GetCollideable()->GetCollisionOrigin();
+			g_pSM->LogMessage(myself,"DefibrillatorOnStart pos: %f %f %f",g_lastedict_pos[0],g_lastedict_pos[1],g_lastedict_pos[2]);
+			TCF = TCF_DefibrillatorOnStartAction;
 		}
 	}
-	
 	return DETOUR_MEMBER_CALL(DefibrillatorOnStartAction)(reserved,player,entity,reserved2);
 }
 
