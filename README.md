@@ -1,4 +1,4 @@
-# defib-fix by V10 and Accelerator
+# Defib-Fix by V10 and Accelerator
 
 https://forums.alliedmods.net/showthread.php?t=118723
 
